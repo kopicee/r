@@ -1,0 +1,247 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+  toc: true
+title: "Modelling China's Coronavirus Numbers"
+---
+
+```{r echo=F}
+LAST_UPDATED <- '20 Feb'
+LAST_SITREP_DATE <- '16 Feb'
+```
+
+### About
+
+This work follows [/u/Antimonic's model](https://snew.notabug.io/r/dataisbeautiful/comments/ez13dv/oc_quadratic_coronavirus_epidemic_growth_model/fgkkh59) (publicized 5 Feb 0125 UTC), based on days 1-15 of [WHO Situation Reports](https://www.who.int/emergencies/diseases/novel-coronavirus-2019/situation-reports) ("SitReps"). We find that we can replicate fairly closely the original model. Although a quadratic model still fits the numbers fairly well, data from recent SitReps appear to diverge from the models.
+
+*Data last updated: `r LAST_SITREP_DATE` 2020*
+
+*Text last updated: `r LAST_UPDATED` 2020*
+
+### Data, from WHO Situation Reports
+```{r echo=T}
+cases <- c(  # Cases reported from China, including Hong Kong, Taiwan and Macau
+    278, 309, 571, 830, 1297,           # 20 - 25 Jan (data for 22nd unavail.)
+    1985, 2741, 4593, 5997, 7736,       # 26 - 30 Jan
+    9720, 11821, 14411, 17238, 20471,   # 31 - 4 Feb
+    24363, 28060, 31211, 34598, 37251,  #  5 - 9 Feb
+    40235, 42708, 44730, 46550, 48548,  # 10 - 14 Feb
+    50054, 51174 #, 70635
+)
+fatalities <- c(  # Fatalities reported from China
+    6, 6, 17, 25, 41, 
+    56, 80, 106, 132, 170, 
+    213, 259, 304, 361, 425,
+    491, 564, 637, 723, 812,
+    909, 1017, 1114, 1368, 1381,
+    1524, 1666 #, 1772
+)
+sar_cases <- c(  # Cases reported from HK, Taiwan and Macau; see details below
+    0, 0, 0, 0, 0, 
+    10, 17, 22, 23, 25, 
+    28, 30, 31, 33, 33, 
+    39, 42, 50, 52, 53,
+    64, 70, 77, 78, 81,
+    84, 84 #, 87
+)
+
+numDays <- length(cases)
+days <- c(1:numDays)
+days2 <- days ^ 2
+
+df <- data.frame(cases, fatalities, sar_cases, days, days2)
+```
+
+The data in this section represents the cases reported by China to the WHO from 20 Jan to 17 Feb 2020. As a detail, `sar_cases` simply records cases from Hong Kong, Macau and Taiwan, which were reported as part of the total number of cases in China. Similarly, fatalities in these regions were also reported under China's tally in the WHO data. In subsequent sections, we will not separate `sar_cases` from the total `cases` in the data as they do not affect the trend in the data greatly.
+
+#### A note on clinically-diagnosed cases
+
+In [SitRep 24](https://www.who.int/docs/default-source/coronaviruse/situation-reports/20200213-sitrep-24-covid-19.pdf?sfvrsn=9a7406a4_4) dated 13 Feb, the WHO reported 13,332 clinically-diagnosed cases from Hubei that were provided separately from the cumulative count, which tracked only laboratory-confirmed cases.
+
+From [SitRep 28](https://www.who.int/docs/default-source/coronaviruse/situation-reports/20200217-sitrep-28-covid-19.pdf?sfvrsn=a19cf2ad_2) (17 Feb) onwards, WHO began reporting numbers from both diagnosis methods in the cumulative count: *"WHO will be reporting all confirmed cases, including both laboratory-confirmed as previously reported, and those reported as clinically diagnosed (currently only applicable to Hubei province, China)."* This caused the number of cumulative cases to spike sharply, and thus we have omitted it until more data is available.
+
+The following table summarizes our inferences about the upper limit of clinically-diagnosed cases based as of 17 Feb:
+
+SitRep | Date   | Lab-confirmed cases | Reported new cases | Clinically-diagnosed cases
+------ | ------ | ------------------- | ------------------ | --------------------------
+24     | 13 Feb | 46550               | 1820               | 13332
+25     | 14 Feb | 48548               | 1998               | ?
+26     | 15 Feb | 50054               | 1506               | ?
+27     | 16 Feb | 51174               | 1121               | ?
+28     | 17 Feb | 70635               | 2051\*              | *(At most 17,410)*
+
+\*Includes both lab-reported and clinically-diagnosed cases.
+
+### Reproduction of /u/Antimonic's model
+
+We attempt to reproduce /u/Antimonic's model, publicized 5 Feb, by fitting to the first 15 days  of the numbers reported by WHO.
+
+```{r echo=T}
+df.anti <- df[1:15, ]
+m.anti <- lm(cases ~ days2 + days, data=df.anti)
+print(m.anti$coefficients)
+```
+```{r echo=F}
+m.anti.rsq <- summary(m.anti)$r.squared
+b0.anti <- round(m.anti$coefficients[2], 3)
+b1.anti <- round(m.anti$coefficients[3], 3)
+b2.anti <- round(m.anti$coefficients[1], 3)
+op0.anti <- if(b1.anti < 0) '-' else '+'
+op1.anti <- if(b2.anti < 0) '-' else '+'
+```
+We find this reproduces a model defined as
+
+> Y = `r b0.anti`x^2^ `r op0.anti` `r abs(b1.anti)`x `r op1.anti` `r abs(b2.anti)`
+
+which agrees very closely with the model given on 5 Feb,
+
+> Y = 123.31x^2^ - 545.83x + 905.5
+
+where `Y` is the number of cases reported to the WHO, and `x` is the number of days since 19 January. The minor differences could be due to errata in [SitRep 14](https://www.who.int/docs/default-source/coronaviruse/situation-reports/20200203-sitrep-14-ncov.pdf?sfvrsn=f7347413_4).
+
+### Our model
+```{r echo=T}
+m <- lm(cases ~ days2 + days, data=df)
+print(m$coefficients)
+```
+```{r echo=F}
+m.rsq <- summary(m)$r.squared
+b0 <- round(m$coefficients[2], 3)
+b1 <- round(m$coefficients[3], 3)
+b2 <- round(m$coefficients[1], 3)
+op0 <- if(b1 < 0) '-' else '+'
+op1 <- if(b2 < 0) '-' else '+'
+```
+
+Fitting to the `r length(days)` WHO Situation Reports in our dataset provides us a model defined as:
+
+> y = `r b0`x^2^ `r op0` `r abs(b1)`x `r op1` `r abs(b2)`
+
+Compared to /u/Antimonic's model publicized 5 Feb:
+
+> Y = 123.31x^2^ - 545.83x + 905.5
+
+### Plots, from current fitted model and extrapolation from /u/Antimonic's model
+```{r echo=F}
+par(mfrow=c(2, 1))
+```
+
+```{r echo=F}
+# Plot our model
+coefs <- m$coefficients
+plot(days, 
+     coefs[1] + days2 * coefs[2] + days * coefs[3],
+     type='l', lty=1, lwd=1, col='blue',
+     xlab=sprintf('WHO SitRep / days, since 20 Jan\n(1=21 Jan, 15=4 Feb, %d=%s)',
+                  length(cases),
+                  LAST_SITREP_DATE),
+     ylab='cases in China, includes HK, Macau & Taiwan')
+
+# Plot WHO data
+points(df$days, df$cases, pch=16)
+
+# Plot /u/Antimonic's initial model
+coefs.anti <- m.anti$coefficients
+lines(df.anti$days, 
+      coefs.anti[1] + df.anti$days2 * coefs.anti[2] + df.anti$days * coefs.anti[3],
+      lty=1, lwd=1, col='red')
+
+# Plot /u/Antimonic's model, extrapolated
+abline(v=15, lty=3)  # Mark day 15
+anti.xtradays <- c(16:length(df$days))
+lines(anti.xtradays,
+      anti.xtradays ^ 2 * m.anti$coefficients[2] +
+          anti.xtradays * m.anti$coefficients[3] +
+          m.anti$coefficients[1],
+      lty=2, lwd=2, col='red')
+
+# Plot legend
+legendYcoord <- coefs[1] + numDays ^ 2 * coefs[2] + numDays * coefs[3]
+legend(x=0.5, y=legendYcoord, 
+       legend=c("Cumulative cases in China, WHO data", 
+                sprintf('Quadratic fit (Rsq=%.5f)', m.rsq),
+                sprintf('/u/Antimonic (Rsq=%.3f for 1 <= x <= 15)', m.anti.rsq),
+                "Extrapolation from /u/Antimonic's fit"),
+       pch=c(16, -1, -1, -1),
+       lty=c(0, 1, 1, 2),
+       lwd=c(0, 1, 1, 1), 
+       col=c('black', 'blue', 'red', 'red'),
+       cex=0.8)
+```
+
+This plot shows:
+
+* (solid red line) the reproduced fit from the original model publicized by /u/Antimonic, based on data from 21 Jan to 4 Feb;
+* (dashed red line) extrapolations of that model for 5 Feb and onwards; and
+* (blue line) the fit for this model using data from 21 Jan to 10 Feb.
+
+We note that the reported numbers follow the model almost exactly, up until WHO SitRep 15 (containing data as of 4 Feb 1000hrs CET/UTC+1). /u/Antimonic's post was made on 5 Feb 0225hrs CET. On the subsequent days, the data began on diverge somewhat from that model's predictions.
+
+Our model still fits to the data fairly well (blue line; R^2^=`r sprintf('%.3f', m.rsq)`). As a quick-and-dirty check, we plotted the residuals of the original model and compared them against our model. We find that the residuals vary much more widely when a wider range of data is fed to a quadratic model. Furthermore, there is a remarkable sinusoidal pattern in the residuals of our model, suggesting that a quadratic function does not approximate the data well.
+
+```{r echo=F}
+par(mfrow=c(1, 2))
+
+plot(m.anti$residuals, ylab='Residuals', xlab='Days')
+title("Residual plot, /u/Antimonic's\n(WHO SitRep 1 to 15)")
+abline(h=0)
+segments(y0=0,
+         y1=m.anti$residuals,
+         x0=df.anti$days, 
+         lty=2, 
+         col='red')
+
+plot(m$residuals, ylab='Residuals', xlab='Days')
+title(sprintf("Residual plot, this model\n(WHO SitRep 1 to %d)", length(days)))
+abline(h=0)
+abline(v=15, lty=3, col='gray')
+segments(y0=0,
+         y1=m$residuals,
+         x0=df$days, 
+         lty=2, 
+         col='blue')
+```
+
+
+### Comparison with SARS (2003)
+
+For the sake of comparison, we provide a quick visualization of the growth in cases by trying to fit a quadratic curve to case counts for the 2003 SARS outbreak, using a similar approach as above. We use data dated between 17 Mar and 17 May 2003 from a dataset of cumulative case counts scraped from the [WHO archives](https://www.who.int/csr/sars/country/en/).
+
+```{r echo=T}
+sarsDays <- 54
+df.sars <- read.csv('sars-cases.csv', nrows=sarsDays, header=T)
+df.sars$chinaTotal <- as.numeric(df.sars$sarCount) + as.numeric(df.sars$chinaCount)
+str(df.sars)  # sarCount is for cases reported in Hong Kong, Taiwan and Macau
+
+df.sars$days <- c(1:sarsDays)
+df.sars$days2 <- c(1:sarsDays) ^ 2
+
+m.sars <- lm(chinaTotal ~ days2 + days, data=df.sars)
+```
+```{r echo=F}
+coefs.sars = m.sars$coefficients
+
+plot(c(1:sarsDays), df.sars$totalCount, 
+     pch=1,
+     xlab='WHO Reports, Cumul. SARS Cases / days (appx.)', 
+     ylab='Cases')
+title('SARS cumulative case count, 17 Mar to 17 May 2003')
+
+points(df.sars$days, df.sars$chinaTotal, pch=16)
+
+lines(df.sars$days, 
+      df.sars$days2 * coefs.sars[2] +
+          df.sars$days * coefs.sars[3] + 
+          coefs.sars[1],
+      lty=1, lwd=1)
+
+legend(1, df.sars$totalCount[length(df.sars$totalCount)], 
+       legend=c('Total cases, global', 
+                'Total cases in China, HK, Taiwan & Macau',
+                'Best fit for cases in China, HK, Taiwan & Macau'),
+       lty=c(-1, -1, 1),
+       pch=c(1, 16, -1),
+       cex=0.8)
+```
+
